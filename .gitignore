@@ -1,0 +1,29 @@
+# Secretos / configuración local
+graph_config.json
+db_config.json
+.env
+
+# Entornos virtuales e instaladores
+venv*/
+Envios/venv*/
+.venv/
+python-*.exe
+
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller
+build/
+dist/
+
+# Reportes generados (contienen datos comerciales)
+VENTAS/
+VENTAS VISITA/
+ VENTAS VISITA/
+INVENTARIO/
+UNIDADES/
+*.pdf
+
+# Logs
+*.log

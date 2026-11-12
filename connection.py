@@ -1,7 +1,56 @@
 
+import json
+import os
+import sys
+
 import pyodbc
 import pandas as pd
 from datetime import date
+
+
+def _app_dir() -> str:
+    """Carpeta del .exe (PyInstaller) o del script."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def load_db_config(path: str = "db_config.json") -> dict:
+    """Configuración de SQL Server.
+
+    Prioridad: variables de entorno SQL_SERVER, SQL_DATABASE, SQL_USER, SQL_PASSWORD (y SQL_DRIVER opcional);
+    si no están todas, se lee `db_config.json` de la carpeta del script/.exe. Ese archivo NO se versiona.
+    """
+    env = {
+        "server": os.getenv("SQL_SERVER"),
+        "database": os.getenv("SQL_DATABASE"),
+        "username": os.getenv("SQL_USER"),
+        "password": os.getenv("SQL_PASSWORD"),
+    }
+    if all(env.values()):
+        env["driver"] = os.getenv("SQL_DRIVER", "ODBC Driver 17 for SQL Server")
+        return env
+
+    if not os.path.isabs(path):
+        path = os.path.join(_app_dir(), path)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"No se encontró {path} ni las variables de entorno SQL_SERVER/SQL_DATABASE/SQL_USER/SQL_PASSWORD."
+        )
+    with open(path, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    cfg.setdefault("driver", "ODBC Driver 17 for SQL Server")
+    return cfg
+
+
+def get_connection():
+    """Abre una conexión a SQL Server con la configuración externa."""
+    cfg = load_db_config()
+    cadena = (
+        f"DRIVER={{{cfg['driver']}}};SERVER={cfg['server']};DATABASE={cfg['database']};"
+        f"UID={cfg['username']};PWD={cfg['password']}"
+    )
+    return pyodbc.connect(cadena)
 
 def get_dataframe(ano: int = None, mes: int = None):
     """
@@ -15,8 +64,7 @@ def get_dataframe(ano: int = None, mes: int = None):
         mes = hoy.month
     
         
-    cadena = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=10.0.0.198;DATABASE=SAPPRODUCCION;UID=mmoreta;PWD=Dttmaster.49'
-    conn = pyodbc.connect(cadena)
+    conn = get_connection()
     cursor = conn.cursor()
     query = """
     WITH dias AS (
@@ -83,8 +131,7 @@ def get_dataframeVisita(ano: int = None, mes: int = None):
         mes = hoy.month
     
         
-    cadena = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=10.0.0.198;DATABASE=SAPPRODUCCION;UID=mmoreta;PWD=Dttmaster.49'
-    conn = pyodbc.connect(cadena)
+    conn = get_connection()
     cursor = conn.cursor()
     query = """
         
@@ -137,7 +184,7 @@ def get_dataframeVisita(ano: int = None, mes: int = None):
     """
     # parámetros: (ano, mes) para la CTE y (ano, mes) para la agregación de fuente
     # cursor.execute(query, (2026, 8, 2026, 8))
-    cursor.execute(query,(ano,mes,ano,mes))
+    cursor.execute(query, (ano, mes, ano, mes))
     data = cursor.fetchall()
     df = pd.DataFrame.from_records(data, columns=[column[0] for column in cursor.description])
     conn.close()
@@ -156,8 +203,7 @@ def get_dataframeInventarioCambios(ano: int = None, mes: int = None , day: int =
     if day is None:
         day = hoy.day
         
-    cadena = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=10.0.0.198;DATABASE=SAPPRODUCCION;UID=mmoreta;PWD=Dttmaster.49'
-    conn = pyodbc.connect(cadena)
+    conn = get_connection()
     cursor = conn.cursor()
     query = """
         SELECT TRY_CONVERT(VARCHAR,CodigoProducto)+' - ' +Descripcion Producto
@@ -181,8 +227,7 @@ def get_dataframeInventarioVencimiento():
     Ejecuta la consulta y devuelve un DataFrame con los resultados.
     """
         
-    cadena = 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=10.0.0.198;DATABASE=SAPPRODUCCION;UID=mmoreta;PWD=Dttmaster.49'
-    conn = pyodbc.connect(cadena)
+    conn = get_connection()
     cursor = conn.cursor()
     query = """
         SELECT 
